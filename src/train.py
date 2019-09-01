@@ -31,13 +31,26 @@ with open('data/twitter_sentiment.csv', encoding='latin-1') as file:
   "is upset that he can't update his Facebook by texting it... and might cry as a result  School today also. Blah!",
   'scotthamilton'], 
   ...
+
+
 """
 
 split_idx = int(0.8 * len(data))
 train_data, val_data = data[:split_idx], data[split_idx:]
 
-train_data = Data([tokenizer.encode(x[1]) + [50256] * for x in train_data], [x[0] for x in train_data])
-val_data = Data([tokenizer.encode(x[1]) for x in val_data], [x[0] for x in val_data])
+train_tokens = [tokenizer.encode(x[1]) for x in train_data]
+max_len = max([len(x) for x in train_tokens])
+# pad with '<|endoftext|>' = [50256] such that all tweets have same length
+train_tokens = [torch.tensor(x + [50256] * (max_len - len(x))) for x in train_tokens]
+train_labels = [torch.tensor(int(x[0])) for x in train_data]
+
+val_tokens = [tokenizer.encode(x[1]) for x in val_data]
+max_len = max([len(x) for x in val_tokens])
+val_tokens = [torch.tensor(x + [50256] * (max_len - len(x))) for x in val_tokens]
+val_labels = [torch.tensor(int(x[0])) for x in val_data]
+
+train_data = Data(train_tokens, train_labels)
+val_data = Data(val_tokens, val_labels)
 
 train_loader = torch.utils.data.DataLoader(train_data, batch_size=50, shuffle=True, num_workers=0)
 val_loader = torch.utils.data.DataLoader(val_data, batch_size=50, shuffle=False, num_workers=0)

@@ -29,8 +29,8 @@ class SentimentGPT(nn.Module):
         for m in classifier.modules():
             if isinstance(m, nn.Linear):
                 nn.init.xavier_uniform_(m.weight.data)
-            if m.bias is not None:
-                nn.init.constant_(m.bias.data, 0)
+                if m.bias is not None:
+                    nn.init.constant_(m.bias.data, 0)
 
     def forward(self, x):
         x = self.gpt2_stem(x)
