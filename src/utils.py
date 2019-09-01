@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 
+import torch
+
+
 class Data(torch.utils.data.Dataset):
 
     def __init__(self, X, y):
@@ -10,7 +13,7 @@ class Data(torch.utils.data.Dataset):
         tweet = self.X[index]
         label = self.y[index]
 
-        return img, label
+        return tweet, label
 
     def __len__(self):
         return len(self.y)

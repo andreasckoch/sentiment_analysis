@@ -20,7 +20,7 @@ loss_fn = nn.CrossEntropyLoss()
 optimizer = torch.optim.SGD(model.classifier.parameters(), lr=LR, momentum=MOM, weight_decay=DECAY)
 
 # DATEN EINLESEN, BATCHEN und dann epochen loopen
-with open('twitter_sentiment.csv', encoding='latin-1') as file:
+with open('data/twitter_sentiment.csv', encoding='latin-1') as file:
     data = csv.reader(file, delimiter='|')
     data = list(data)
 """
@@ -36,9 +36,8 @@ with open('twitter_sentiment.csv', encoding='latin-1') as file:
 split_idx = int(0.8 * len(data))
 train_data, val_data = data[:split_idx], data[split_idx:]
 
-train_data = Data(torch.tensor([tokenizer.encode(x[1]) + [50256] * for x in train_data]),
-                  torch.tensor([x[0] for x in train_data]))
-val_data = Data(torch.tensor([tokenizer.encode(x[1]) for x in val_data]), torch.tensor([x[0] for x in val_data]))
+train_data = Data([tokenizer.encode(x[1]) + [50256] * for x in train_data], [x[0] for x in train_data])
+val_data = Data([tokenizer.encode(x[1]) for x in val_data], [x[0] for x in val_data])
 
 train_loader = torch.utils.data.DataLoader(train_data, batch_size=50, shuffle=True, num_workers=0)
 val_loader = torch.utils.data.DataLoader(val_data, batch_size=50, shuffle=False, num_workers=0)
