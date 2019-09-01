@@ -22,7 +22,7 @@ with open('../data/twitter_sentiment.csv', encoding='latin-1') as file:
     data = csv.reader(file, delimiter='|')
     data = list(data)
     idx = int(len(data) * USE)
-    print("Using {} data points.".format(idx))
+    print("Using {} data points.".format("all" if idx == len(data) else idx))
     data = [data[i] for i in np.random.permutation(len(data))]
     data = data[:idx]
 
