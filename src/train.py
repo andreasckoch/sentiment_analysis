@@ -15,6 +15,7 @@ MOM = 0.99
 DECAY = 0.0
 
 USE = 0.0002
+TEST_THR = 0
 
 
 # DATEN EINLESEN, BATCHEN und dann epochen loopen
@@ -47,19 +48,24 @@ labels = [torch.tensor(int(x[0])) for x in data]
 
 
 # Create Data Loaders for Training and Validation Data
-split_idx = int(0.8 * len(data))
-train_data = Data(tokens[:split_idx], labels[:split_idx])
-val_data = Data(tokens[split_idx:], labels[split_idx:])
+split_idx_1 = int(0.8 * len(data))
+split_idx_2 = int(0.9 * len(data))
+train_data = Data(tokens[:split_idx_1], labels[:split_idx_1])
+val_data = Data(tokens[split_idx_1:split_idx_2], labels[split_idx_1:split_idx_2])
+test_data = Data(tokens[split_idx_2:], labels[split_idx_2:])
 train_loader = torch.utils.data.DataLoader(train_data, batch_size=50, shuffle=True, num_workers=0)
 val_loader = torch.utils.data.DataLoader(val_data, batch_size=50, shuffle=True, num_workers=0)
+test_loader = torch.utils.data.DataLoader(test_data, batch_size=50, shuffle=True, num_workers=0)
 
 
 model = SentimentGPT(max_tweet_len)
 loss_fn = nn.CrossEntropyLoss()
 optimizer = torch.optim.SGD(model.classifier.parameters(), lr=LR, momentum=MOM, weight_decay=DECAY)
 
+print("Start training")
 for e in range(EPOCHS):
     epoch_loss = 0
+    model.train()
     for tweets, labels in train_loader:
         optimizer.zero_grad()
         output = model(tweets)
@@ -68,7 +74,25 @@ for e in range(EPOCHS):
         loss.backward()
         optimizer.step()
     print("EPOCH: {}, LOSS: {:.2f}".format(e, epoch_loss))
+    train_loss = epoch_loss / len(train_loader)
 
-    # for tweets, labels in val_loader:
-    #     output = model(tweets)
-    #     loss = loss_fn(output, labels)
+    val_loss = 0
+    model.eval()
+    for tweets, labels in val_loader:
+        output = model(tweets)
+        val_loss += loss_fn(output, labels).item()
+    val_loss /= len(val_loader)
+    print("EPOCH: {}, TRAIN_LOSS: {:.2f}, VAL_LOSS: {:.2f}".format(e, train_loss, val_loss))
+
+# Test model for performance. If it exceeds a threshold pickle it and save it on a cloud service
+test_loss = 0
+for tweets, labels in test_loader:
+    output = model(tweets)
+    test_loss += loss_fn(output, labels).item()
+test_loss /= len(test_loader)
+print("TEST_LOSS: {:.2f}".format(test_loss))
+if test_loss >= TEST_THR:
+    print("Performance exceeded threshold. Saving model to models dir to be uploaded to cloud service")
+    torch.save(model, '../models')
+    print("Execute: bash uploadmodels.sh")
+
