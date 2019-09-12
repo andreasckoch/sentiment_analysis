@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import numpy as np
+import datetime
 import torch
 import torch.nn as nn
 import pytorch_transformers as pt
@@ -12,10 +13,10 @@ from utils import Data
 EPOCHS = 20
 LR = 0.9
 MOM = 0.99
-DECAY = 0.0
+DECAY = 0.5
 
 USE = 0.0002
-TEST_THR = 0
+TEST_THR = 100000000
 
 
 # DATEN EINLESEN, BATCHEN und dann epochen loopen
@@ -91,8 +92,8 @@ for tweets, labels in test_loader:
     test_loss += loss_fn(output, labels).item()
 test_loss /= len(test_loader)
 print("TEST_LOSS: {:.2f}".format(test_loss))
-if test_loss >= TEST_THR:
+if test_loss <= TEST_THR:
     print("Performance exceeded threshold. Saving model to models dir to be uploaded to cloud service")
-    torch.save(model, '../models')
+    torch.save(model, '../models/sa_model_{}.pt'.format(datetime.datetime.now().strftime("%Y-%m-%d_%H:%M")))
     print("Execute: bash uploadmodels.sh")
 
