@@ -2,6 +2,7 @@
 
 import numpy as np
 import datetime
+import time
 import torch
 import torch.nn as nn
 import pytorch_transformers as pt
@@ -15,9 +16,12 @@ LR = 0.9
 MOM = 0.99
 DECAY = 0.5
 
+GPU = True
 USE = 0.0002
 TEST_THR = 100000000
 
+if torch.cuda.is_available() is False:
+    GPU = False
 
 # DATEN EINLESEN, BATCHEN und dann epochen loopen
 with open('../data/twitter_sentiment.csv', encoding='latin-1') as file:
@@ -60,34 +64,48 @@ test_loader = torch.utils.data.DataLoader(test_data, batch_size=50, shuffle=True
 
 
 model = SentimentGPT(max_tweet_len)
+if GPU:
+    model.cuda()
 loss_fn = nn.CrossEntropyLoss()
 optimizer = torch.optim.SGD(model.classifier.parameters(), lr=LR, momentum=MOM, weight_decay=DECAY)
 
 print("Start training")
 for e in range(EPOCHS):
+    epoch_start = time.time()
     epoch_loss = 0
     model.train()
-    for tweets, labels in train_loader:
+    len_train_loader = len(train_loader)
+    for i, tweets, labels in enumerate(train_loader):
+        if GPU:
+            tweets.cuda()
+            labels.cuda()
         optimizer.zero_grad()
         output = model(tweets)
         loss = loss_fn(output, labels)
         epoch_loss += loss.item()
         loss.backward()
         optimizer.step()
+        print("Epoch {}: Step {} / {}".format(e, i, len_train_loader))
     print("EPOCH: {}, LOSS: {:.2f}".format(e, epoch_loss))
     train_loss = epoch_loss / len(train_loader)
 
     val_loss = 0
     model.eval()
     for tweets, labels in val_loader:
+        if GPU:
+            tweets.cuda()
+            labels.cuda()
         output = model(tweets)
         val_loss += loss_fn(output, labels).item()
     val_loss /= len(val_loader)
-    print("EPOCH: {}, TRAIN_LOSS: {:.2f}, VAL_LOSS: {:.2f}".format(e, train_loss, val_loss))
+    print("EPOCH: {} took {}, TRAIN_LOSS: {:.2f}, VAL_LOSS: {:.2f}".format(e, time.strftime("%H:%M:%S".format(time.time() - epoch_start)), train_loss, val_loss))
 
 # Test model for performance. If it exceeds a threshold pickle it and save it on a cloud service
 test_loss = 0
 for tweets, labels in test_loader:
+    if GPU:
+        tweets.cuda()
+        labels.cuda()
     output = model(tweets)
     test_loss += loss_fn(output, labels).item()
 test_loss /= len(test_loader)
