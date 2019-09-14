@@ -73,12 +73,13 @@ print("Start training")
 for e in range(EPOCHS):
     epoch_start = time.time()
     epoch_loss = 0
-    model.train()
     len_train_loader = len(train_loader)
-    for i, tweets, labels in enumerate(train_loader):
+    for i, batch in enumerate(train_loader):
+        tweets = batch[0]
+        labels = batch[1]
         if GPU:
-            tweets.cuda()
-            labels.cuda()
+            tweets = tweets.cuda()
+            labels = labels.cuda()
         optimizer.zero_grad()
         output = model(tweets)
         loss = loss_fn(output, labels)
@@ -90,11 +91,10 @@ for e in range(EPOCHS):
     train_loss = epoch_loss / len(train_loader)
 
     val_loss = 0
-    model.eval()
     for tweets, labels in val_loader:
         if GPU:
-            tweets.cuda()
-            labels.cuda()
+            tweets = tweets.cuda()
+            labels = labels.cuda()
         output = model(tweets)
         val_loss += loss_fn(output, labels).item()
     val_loss /= len(val_loader)
@@ -104,8 +104,8 @@ for e in range(EPOCHS):
 test_loss = 0
 for tweets, labels in test_loader:
     if GPU:
-        tweets.cuda()
-        labels.cuda()
+        tweets = tweets.cuda()
+        labels = labels.cuda()
     output = model(tweets)
     test_loss += loss_fn(output, labels).item()
 test_loss /= len(test_loader)
