@@ -1,15 +1,12 @@
 #!/usr/bin/env python
 
-import numpy as np
 import datetime
 import time
 import torch
 import torch.nn as nn
 import torchtext
 import pytorch_transformers as pt
-import csv
 from model import SentimentGPT
-from utils import Data
 
 # PARAMETERS
 EPOCHS = 20
@@ -50,6 +47,7 @@ data_fields = [
     ))]
 train_data, val_data, test_data = torchtext.data.TabularDataset.splits(path='../data/', train='train.csv',
                                                                        validation='val.csv', test='test.csv', format='csv', fields=data_fields, csv_reader_params={'delimiter': '|'})
+
 
 print("DEBUG1")
 # Generate torchtext iterator (dataloader equivalent)
