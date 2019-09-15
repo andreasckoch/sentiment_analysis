@@ -85,8 +85,8 @@ data_fields=[
                             sequential=True,
                             fix_length=max_tweet_len,
                             use_vocab=False,
-                            tokenize=tokenizer,
-                            pad_token='<|endoftext|>',
+                            tokenize=tokenizer.encode,
+                            pad_token=50256,
                             dtype=torch.cuda.LongTensor
                                  ))]
 train_data, val_data, test_data = torchtext.data.TabularDataset.splits(path='../data/', train='train.csv',
