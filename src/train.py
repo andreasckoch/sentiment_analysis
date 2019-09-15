@@ -6,7 +6,6 @@ import time
 import torch
 import torch.nn as nn
 import torchtext
-import pandas as pd
 import pytorch_transformers as pt
 import csv
 from model import SentimentGPT
@@ -22,7 +21,7 @@ GPU = False
 USE = 0.00002
 TEST_THR = 100000000
 
-SPLIT_CSV = True
+SPLIT_CSV = False
 
 
 if torch.cuda.is_available() is False:
@@ -79,22 +78,24 @@ data_fields=[
             ('label', torchtext.data.Field(
                             sequential=False,
                             use_vocab=False,
+                            preprocessing=int,
+                            is_target=True,
                             dtype=torch.cuda.ByteTensor
             )),
             ('tweet', torchtext.data.Field(
                             sequential=True,
                             fix_length=max_tweet_len,
-                            use_vocab=False,
+                            use_vocab=True,
                             tokenize=tokenizer.encode,
                             pad_token=50256,
                             dtype=torch.cuda.LongTensor
                                  ))]
 train_data, val_data, test_data = torchtext.data.TabularDataset.splits(path='../data/', train='train.csv',
-                                               validation='val.csv', test='test.csv', format='csv', fields=data_fields)
+                                validation='val.csv', test='test.csv', format='csv', fields=data_fields, csv_reader_params={'delimiter':'|'})
 
 
 # Generate torchtext iterator (dataloader equivalent)
-train_iterator = torchtext.data.Iterator(train_data, batch_size=128, shuffle=True, device=torch.cuda.current_device())
+train_iterator = torchtext.data.Iterator(train_data, batch_size=128, shuffle=True, device=torch.cuda.current_device(), train=True)
 val_iterator = torchtext.data.Iterator(val_data, batch_size=128, shuffle=True, device=torch.cuda.current_device())
 test_iterator = torchtext.data.Iterator(test_data, batch_size=128, shuffle=True, device=torch.cuda.current_device())
 
@@ -114,9 +115,6 @@ for e in range(EPOCHS):
         start = time.time()
         tweets = batch[0]
         labels = batch[1]
-        if GPU:
-            tweets = tweets.cuda()
-            labels = labels.cuda()
         optimizer.zero_grad()
         output = model(tweets)
         loss = loss_fn(output, labels)
@@ -129,9 +127,6 @@ for e in range(EPOCHS):
 
     val_loss = 0
     for tweets, labels in val_iterator:
-        if GPU:
-            tweets = tweets.cuda()
-            labels = labels.cuda()
         output = model(tweets)
         val_loss += loss_fn(output, labels).item()
     val_loss /= len(val_iterator)
@@ -140,9 +135,6 @@ for e in range(EPOCHS):
 # Test model for performance. If it exceeds a threshold pickle it and save it on a cloud service
 test_loss = 0
 for tweets, labels in test_iterator:
-    if GPU:
-        tweets = tweets.cuda()
-        labels = labels.cuda()
     output = model(tweets)
     test_loss += loss_fn(output, labels).item()
 test_loss /= len(test_iterator)
