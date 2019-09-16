@@ -20,43 +20,50 @@ GPU = True
 USE = 0.02
 TEST_THR = 100000000
 MAX_TWEET_LEN = 426
+LOAD_DATA = True
 
 if torch.cuda.is_available() is False:
     GPU = False
 
-with open('../data/train.csv', encoding='latin-1') as file:
-    train_data = csv.reader(file, delimiter='|')
-    train_data = list(train_data)
-    idx = int(len(train_data) * USE)
-    print("Using {} data points.".format("all" if idx == len(train_data) else idx))
-    train_data = train_data[:idx]
-with open('../data/val.csv', encoding='latin-1') as file:
-    val_data = csv.reader(file, delimiter='|')
-    val_data = list(val_data)
-    idx = int(len(val_data) * USE)
-    val_data = val_data[:idx]
-with open('../data/test.csv', encoding='latin-1') as file:
-    test_data = csv.reader(file, delimiter='|')
-    test_data = list(test_data)
-    idx = int(len(test_data) * USE)
-    test_data = test_data[:idx]
+if LOAD_DATA:
+    t = time.time()
+    with open('../data/train.csv', encoding='latin-1') as file:
+        train_data = csv.reader(file, delimiter='|')
+        train_data = list(train_data)
+        idx = int(len(train_data) * USE)
+        print("Using {} data points.".format("all" if idx == len(train_data) else idx))
+        train_data = train_data[:idx]
+    with open('../data/val.csv', encoding='latin-1') as file:
+        val_data = csv.reader(file, delimiter='|')
+        val_data = list(val_data)
+        idx = int(len(val_data) * USE)
+        val_data = val_data[:idx]
+    with open('../data/test.csv', encoding='latin-1') as file:
+        test_data = csv.reader(file, delimiter='|')
+        test_data = list(test_data)
+        idx = int(len(test_data) * USE)
+        test_data = test_data[:idx]
 
-tokenizer = pt.tokenization_gpt2.GPT2Tokenizer.from_pretrained('gpt2')
-train_tokens = [tokenizer.encode(x[1]) for x in train_data]
-val_tokens = [tokenizer.encode(x[1]) for x in val_data]
-test_tokens = [tokenizer.encode(x[1]) for x in test_data]
-# pad with '<|endoftext|>' = [50256] token such that all tweets have same length
-train_tokens = [torch.tensor(x + [50256] * (MAX_TWEET_LEN - len(x))) for x in train_tokens]
-val_tokens = [torch.tensor(x + [50256] * (MAX_TWEET_LEN - len(x))) for x in val_tokens]
-test_tokens = [torch.tensor(x + [50256] * (MAX_TWEET_LEN - len(x))) for x in test_tokens]
-train_labels = [torch.tensor(int(x[0])) for x in train_data]
-val_labels = [torch.tensor(int(x[0])) for x in val_data]
-test_labels = [torch.tensor(int(x[0])) for x in test_data]
+    tokenizer = pt.tokenization_gpt2.GPT2Tokenizer.from_pretrained('gpt2')
+    train_tokens = [tokenizer.encode(x[1]) for x in train_data]
+    val_tokens = [tokenizer.encode(x[1]) for x in val_data]
+    test_tokens = [tokenizer.encode(x[1]) for x in test_data]
+    # pad with '<|endoftext|>' = [50256] token such that all tweets have same length
+    train_tokens = [torch.tensor(x + [50256] * (MAX_TWEET_LEN - len(x))) for x in train_tokens]
+    val_tokens = [torch.tensor(x + [50256] * (MAX_TWEET_LEN - len(x))) for x in val_tokens]
+    test_tokens = [torch.tensor(x + [50256] * (MAX_TWEET_LEN - len(x))) for x in test_tokens]
+    train_labels = [torch.tensor(int(x[0])) for x in train_data]
+    val_labels = [torch.tensor(int(x[0])) for x in val_data]
+    test_labels = [torch.tensor(int(x[0])) for x in test_data]
+    train_data = Data(train_tokens, train_labels)
+    val_data = Data(val_tokens, val_labels)
+    test_data = Data(test_tokens, test_labels)
 
-train_loader = torch.utils.data.DataLoader(train_data, batch_size=128, shuffle=True, num_workers=4)
-val_loader = torch.utils.data.DataLoader(val_data, batch_size=128, shuffle=True, num_workers=0)
-test_loader = torch.utils.data.DataLoader(test_data, batch_size=128, shuffle=True, num_workers=0)
+    train_loader = torch.utils.data.DataLoader(train_data, batch_size=128, shuffle=True, num_workers=4)
+    val_loader = torch.utils.data.DataLoader(val_data, batch_size=128, shuffle=True, num_workers=0)
+    test_loader = torch.utils.data.DataLoader(test_data, batch_size=128, shuffle=True, num_workers=0)
 
+    print("Finished data preprocessing in {}".format(time.strftime("%M:%S".format(time.time() - t))))
 
 model = SentimentGPT(MAX_TWEET_LEN)
 if GPU:
@@ -73,41 +80,30 @@ for e in range(EPOCHS):
         tweets = batch[0]
         labels = batch[1]
         if GPU:
-            t = time.time()
             tweets = tweets.cuda()
             labels = labels.cuda()
-            print("load on cuda: {:.4f}".format(time.time() - t))
         t = time.time()
         optimizer.zero_grad()
-        print("load on cuda: {:.4f}".format(time.time() - t))
-        t = time.time()
         output = model(tweets)
-        print("pass through model: {:.4f}".format(time.time() - t))
-        t = time.time()
         loss = loss_fn(output, labels)
-        print("loss calc: {:.4f}".format(time.time() - t))
-        t = time.time()
-        epoch_loss += loss.item()
-        print("add loss item: {:.4f}".format(time.time() - t))
-        t = time.time()
+        batch_loss = loss.data().cpu().numpy()
+        epoch_loss += batch_loss
         loss.backward()
-        print("loss backward: {:.4f}".format(time.time() - t))
-        t = time.time()
         optimizer.step()
-        print("optimizer step: {:.4f}".format(time.time() - t))
-
-    print("Epoch {}: Step {} / {}".format(e, i, len_train_loader))
-    print("EPOCH: {}, LOSS: {:.2f}".format(e, epoch_loss))
-    train_loss = epoch_loss / len(train_loader)
+        print("Epoch {}: Step {} / {} - Train batch loss: {}".format(e, i, len_train_loader, batch_loss))
+    train_loss = epoch_loss / len_train_loader
 
     val_loss = 0
+    len_val_loader = len(val_loader)
     for tweets, labels in val_loader:
         if GPU:
             tweets = tweets.cuda()
             labels = labels.cuda()
         output = model(tweets)
-        val_loss += loss_fn(output, labels).item()
-    val_loss /= len(val_loader)
+        batch_loss = loss_fn(output, labels).data().cpu().numpy()
+        val_loss += batch_loss
+        print("Epoch {}: Step {} / {} - Val batch loss: {}".format(e, i, len_val_loader, batch_loss))
+    val_loss /= len_val_loader
     print("EPOCH: {} took {}, TRAIN_LOSS: {:.2f}, VAL_LOSS: {:.2f}".format(e, time.strftime("%H:%M:%S".format(time.time() - epoch_start)), train_loss, val_loss))
 
 # Test model for performance. If it exceeds a threshold pickle it and save it on a cloud service
@@ -117,7 +113,7 @@ for tweets, labels in test_loader:
         tweets = tweets.cuda()
         labels = labels.cuda()
     output = model(tweets)
-    test_loss += loss_fn(output, labels).item()
+    test_loss += loss_fn(output, labels).data().cpu().numpy()
 test_loss /= len(test_loader)
 print("TEST_LOSS: {:.2f}".format(test_loss))
 if test_loss <= TEST_THR:
