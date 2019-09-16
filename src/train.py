@@ -5,10 +5,11 @@ import datetime
 import time
 import torch
 import torch.nn as nn
+from torch.utils.data import TensorDataset
 import pytorch_transformers as pt
 import csv
 from model import SentimentGPT
-from utils import Data
+from utils import collate_wrapper
 
 # PARAMETERS
 EPOCHS = 20
@@ -49,21 +50,22 @@ if LOAD_DATA:
     val_tokens = [tokenizer.encode(x[1]) for x in val_data]
     test_tokens = [tokenizer.encode(x[1]) for x in test_data]
     # pad with '<|endoftext|>' = [50256] token such that all tweets have same length
-    train_tokens = [torch.tensor(x + [50256] * (MAX_TWEET_LEN - len(x))) for x in train_tokens]
-    val_tokens = [torch.tensor(x + [50256] * (MAX_TWEET_LEN - len(x))) for x in val_tokens]
-    test_tokens = [torch.tensor(x + [50256] * (MAX_TWEET_LEN - len(x))) for x in test_tokens]
-    train_labels = [torch.tensor(int(x[0])) for x in train_data]
-    val_labels = [torch.tensor(int(x[0])) for x in val_data]
-    test_labels = [torch.tensor(int(x[0])) for x in test_data]
-    train_data = Data(train_tokens, train_labels)
-    val_data = Data(val_tokens, val_labels)
-    test_data = Data(test_tokens, test_labels)
+    train_tokens = torch.tensor([x + [50256] * (MAX_TWEET_LEN - len(x)) for x in train_tokens])
+    val_tokens = torch.tensor([x + [50256] * (MAX_TWEET_LEN - len(x)) for x in val_tokens])
+    test_tokens = torch.tensor([x + [50256] * (MAX_TWEET_LEN - len(x)) for x in test_tokens])
+    train_labels = torch.tensor([int(x[0]) for x in train_data])
+    val_labels = torch.tensor([int(x[0]) for x in val_data])
+    test_labels = torch.tensor([int(x[0]) for x in test_data])
+    train_data = TensorDataset(train_tokens, train_labels)
+    val_data = TensorDataset(val_tokens, val_labels)
+    test_data = TensorDataset(test_tokens, test_labels)
 
-    train_loader = torch.utils.data.DataLoader(train_data, batch_size=128, shuffle=True, num_workers=4)
+    train_loader = torch.utils.data.DataLoader(train_data, batch_size=128, shuffle=True, num_workers=8, pin_memory=True,
+                                               collate_fn=collate_wrapper)
     val_loader = torch.utils.data.DataLoader(val_data, batch_size=128, shuffle=True, num_workers=0)
     test_loader = torch.utils.data.DataLoader(test_data, batch_size=128, shuffle=True, num_workers=0)
 
-    print("Finished data preprocessing in {}".format(time.strftime("%M:%S".format(time.time() - t))))
+    print("Finished data preprocessing in {}".format(time.time() - t))
 
 model = SentimentGPT(MAX_TWEET_LEN)
 if GPU:
@@ -77,8 +79,8 @@ for e in range(EPOCHS):
     epoch_loss = 0
     len_train_loader = len(train_loader)
     for i, batch in enumerate(train_loader):
-        tweets = batch[0]
-        labels = batch[1]
+        tweets = batch.inp
+        labels = batch.tgt
         if GPU:
             tweets = tweets.cuda()
             labels = labels.cuda()
@@ -86,34 +88,40 @@ for e in range(EPOCHS):
         optimizer.zero_grad()
         output = model(tweets)
         loss = loss_fn(output, labels)
-        batch_loss = loss.data().cpu().numpy()
+        batch_loss = loss.data.cpu().numpy()
         epoch_loss += batch_loss
         loss.backward()
         optimizer.step()
-        print("Epoch {}: Step {} / {} - Train batch loss: {}".format(e, i, len_train_loader, batch_loss))
+        print("Epoch {}: Step {} / {} took {}s - Train batch loss: {}".format(e, i, len_train_loader, time.time()-t, batch_loss))
     train_loss = epoch_loss / len_train_loader
 
     val_loss = 0
     len_val_loader = len(val_loader)
-    for tweets, labels in val_loader:
+    for i, batch in enumerate(val_loader):
+        tweets = batch.inp
+        labels = batch.tgt
         if GPU:
             tweets = tweets.cuda()
             labels = labels.cuda()
         output = model(tweets)
-        batch_loss = loss_fn(output, labels).data().cpu().numpy()
+        batch_loss = loss_fn(output, labels).data.cpu().numpy()
         val_loss += batch_loss
-        print("Epoch {}: Step {} / {} - Val batch loss: {}".format(e, i, len_val_loader, batch_loss))
+        print("Epoch {} - Val batch loss: {}".format(e, batch_loss))
     val_loss /= len_val_loader
     print("EPOCH: {} took {}, TRAIN_LOSS: {:.2f}, VAL_LOSS: {:.2f}".format(e, time.strftime("%H:%M:%S".format(time.time() - epoch_start)), train_loss, val_loss))
 
 # Test model for performance. If it exceeds a threshold pickle it and save it on a cloud service
 test_loss = 0
-for tweets, labels in test_loader:
+len_test_loader = len(test_loader)
+for i, batch in enumerate(test_loader):
+    tweets = batch.inp
+    labels = batch.tgt
     if GPU:
         tweets = tweets.cuda()
         labels = labels.cuda()
     output = model(tweets)
-    test_loss += loss_fn(output, labels).data().cpu().numpy()
+    test_loss += loss_fn(output, labels).data.cpu().numpy()
+    print("Step {} / {} - Test batch loss: {}".format(i, len_test_loader, batch_loss))
 test_loss /= len(test_loader)
 print("TEST_LOSS: {:.2f}".format(test_loss))
 if test_loss <= TEST_THR:
