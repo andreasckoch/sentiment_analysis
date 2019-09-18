@@ -22,7 +22,7 @@ class Data(torch.utils.data.Dataset):
         return len(self.y)
 
 """
-Create function to apply to batch to allow for memory pinning.
+Create function to apply to batch to allow for memory pinning when using a custom batch/custom dataset.
 Following guide on https://pytorch.org/docs/master/data.html#single-and-multi-process-data-loading
 """
 

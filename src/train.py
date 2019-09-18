@@ -26,6 +26,12 @@ LOAD_DATA = True
 if torch.cuda.is_available() is False:
     GPU = False
 
+device = None
+if GPU:
+    device = torch.device('cuda')
+else:
+    device = torch.device('cpu')
+
 if LOAD_DATA:
     t = time.time()
     with open('../data/train.csv', encoding='latin-1') as file:
@@ -50,29 +56,26 @@ if LOAD_DATA:
     val_tokens = [tokenizer.encode(x[1]) for x in val_data]
     test_tokens = [tokenizer.encode(x[1]) for x in test_data]
     # pad with '<|endoftext|>' = [50256] token such that all tweets have same length
-    train_tokens = torch.tensor([x + [50256] * (MAX_TWEET_LEN - len(x)) for x in train_tokens])
-    val_tokens = torch.tensor([x + [50256] * (MAX_TWEET_LEN - len(x)) for x in val_tokens])
-    test_tokens = torch.tensor([x + [50256] * (MAX_TWEET_LEN - len(x)) for x in test_tokens])
+    train_tokens = torch.tensor([x + [50256] * (MAX_TWEET_LEN - len(x)) for x in train_tokens], device=device)
+    val_tokens = torch.tensor([x + [50256] * (MAX_TWEET_LEN - len(x)) for x in val_tokens], device=device)
+    test_tokens = torch.tensor([x + [50256] * (MAX_TWEET_LEN - len(x)) for x in test_tokens], device=device)
 
     # Labels need to be a 1D tensor with integers indicating the class for each value
-    train_labels = torch.tensor([int(x[0]) for x in train_data])
-    val_labels = torch.tensor([int(x[0]) for x in val_data])
-    test_labels = torch.tensor([int(x[0]) for x in test_data])
+    train_labels = torch.tensor([int(x[0]) for x in train_data], device=device)
+    val_labels = torch.tensor([int(x[0]) for x in val_data], device=device)
+    test_labels = torch.tensor([int(x[0]) for x in test_data], device=device)
 
     train_data = TensorDataset(train_tokens, train_labels)
     val_data = TensorDataset(val_tokens, val_labels)
     test_data = TensorDataset(test_tokens, test_labels)
 
-    train_loader = torch.utils.data.DataLoader(train_data, batch_size=128, shuffle=True, num_workers=0, pin_memory=True,
-                                               collate_fn=collate_wrapper)
+    train_loader = torch.utils.data.DataLoader(train_data, batch_size=128, shuffle=True, num_workers=0, pin_memory=False)
     val_loader = torch.utils.data.DataLoader(val_data, batch_size=128, shuffle=True, num_workers=0)
     test_loader = torch.utils.data.DataLoader(test_data, batch_size=128, shuffle=True, num_workers=0)
 
     print("Finished data preprocessing in {}".format(time.time() - t))
 
-model = SentimentGPT(MAX_TWEET_LEN)
-if GPU:
-    model.cuda()
+model = SentimentGPT(MAX_TWEET_LEN).to(device=device)
 loss_fn = nn.CrossEntropyLoss()
 optimizer = torch.optim.SGD(model.classifier.parameters(), lr=LR, momentum=MOM, weight_decay=DECAY)
 
@@ -84,9 +87,9 @@ for e in range(EPOCHS):
     for i, batch in enumerate(train_loader):
         tweets = batch.inp
         labels = batch.tgt
-        if GPU:
-            tweets = tweets.cuda()
-            labels = labels.cuda()
+#        if GPU:
+#            tweets = tweets.cuda()
+#            labels = labels.cuda()
         t = time.time()
         optimizer.zero_grad()
         output = model(tweets)
@@ -103,9 +106,9 @@ for e in range(EPOCHS):
     for i, batch in enumerate(val_loader):
         tweets = batch.inp
         labels = batch.tgt
-        if GPU:
-            tweets = tweets.cuda()
-            labels = labels.cuda()
+#        if GPU:
+#            tweets = tweets.cuda()
+#            labels = labels.cuda()
         output = model(tweets)
         batch_loss = loss_fn(output, labels).data.cpu().numpy()
         val_loss += batch_loss
@@ -119,9 +122,9 @@ len_test_loader = len(test_loader)
 for i, batch in enumerate(test_loader):
     tweets = batch.inp
     labels = batch.tgt
-    if GPU:
-        tweets = tweets.cuda()
-        labels = labels.cuda()
+#    if GPU:
+#        tweets = tweets.cuda()
+#        labels = labels.cuda()
     output = model(tweets)
     test_loss += loss_fn(output, labels).data.cpu().numpy()
     print("Step {} / {} - Test batch loss: {}".format(i, len_test_loader, batch_loss))
