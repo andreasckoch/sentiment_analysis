@@ -53,14 +53,17 @@ if LOAD_DATA:
     train_tokens = torch.tensor([x + [50256] * (MAX_TWEET_LEN - len(x)) for x in train_tokens])
     val_tokens = torch.tensor([x + [50256] * (MAX_TWEET_LEN - len(x)) for x in val_tokens])
     test_tokens = torch.tensor([x + [50256] * (MAX_TWEET_LEN - len(x)) for x in test_tokens])
+
+    # Labels need to be a 1D tensor with integers indicating the class for each value
     train_labels = torch.tensor([int(x[0]) for x in train_data])
     val_labels = torch.tensor([int(x[0]) for x in val_data])
     test_labels = torch.tensor([int(x[0]) for x in test_data])
+
     train_data = TensorDataset(train_tokens, train_labels)
     val_data = TensorDataset(val_tokens, val_labels)
     test_data = TensorDataset(test_tokens, test_labels)
 
-    train_loader = torch.utils.data.DataLoader(train_data, batch_size=128, shuffle=True, num_workers=8, pin_memory=True,
+    train_loader = torch.utils.data.DataLoader(train_data, batch_size=128, shuffle=True, num_workers=0, pin_memory=True,
                                                collate_fn=collate_wrapper)
     val_loader = torch.utils.data.DataLoader(val_data, batch_size=128, shuffle=True, num_workers=0)
     test_loader = torch.utils.data.DataLoader(test_data, batch_size=128, shuffle=True, num_workers=0)

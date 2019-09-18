@@ -2,7 +2,10 @@
 
 import torch
 
-
+"""
+Map-style dataset as an iteration can be well performed randomly.
+See https://pytorch.org/docs/master/data.html#single-and-multi-process-data-loading 
+"""
 class Data(torch.utils.data.Dataset):
 
     def __init__(self, X, y):
