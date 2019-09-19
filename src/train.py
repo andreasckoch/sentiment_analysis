@@ -22,12 +22,16 @@ USE = 0.02
 TEST_THR = 100000000
 MAX_TWEET_LEN = 426
 LOAD_DATA = True
+DEBUG = False
+ACCUMULATE_GRADS = 1  # update gradients only every k'th step during training (inactive when k=1)
 
-if torch.cuda.is_available() is False:
-    GPU = False
+"""
+Dataset is small enough to completely store on the gpu. 
+If that's not possible, move batches to gpu while iterating over them and set pin_memory=True, num_workers=8 (ca.) in data loaders.
+"""
 
 device = None
-if GPU:
+if GPU and torch.cuda.is_available():
     device = torch.device('cuda')
 else:
     device = torch.device('cpu')
@@ -69,9 +73,9 @@ if LOAD_DATA:
     val_data = TensorDataset(val_tokens, val_labels)
     test_data = TensorDataset(test_tokens, test_labels)
 
-    train_loader = torch.utils.data.DataLoader(train_data, batch_size=128, shuffle=True, num_workers=0, pin_memory=False)
-    val_loader = torch.utils.data.DataLoader(val_data, batch_size=128, shuffle=True, num_workers=0)
-    test_loader = torch.utils.data.DataLoader(test_data, batch_size=128, shuffle=True, num_workers=0)
+    train_loader = torch.utils.data.DataLoader(train_data, batch_size=64, shuffle=True, num_workers=0, pin_memory=False)
+    val_loader = torch.utils.data.DataLoader(val_data, batch_size=64, shuffle=True, num_workers=0)
+    test_loader = torch.utils.data.DataLoader(test_data, batch_size=64, shuffle=True, num_workers=0)
 
     print("Finished data preprocessing in {}".format(time.time() - t))
 
@@ -82,37 +86,78 @@ optimizer = torch.optim.SGD(model.classifier.parameters(), lr=LR, momentum=MOM, 
 print("Start training")
 for e in range(EPOCHS):
     epoch_start = time.time()
-    epoch_loss = 0
+    train_loss = 0
     len_train_loader = len(train_loader)
     for i, batch in enumerate(train_loader):
-        tweets = batch.inp
-        labels = batch.tgt
-#        if GPU:
-#            tweets = tweets.cuda()
-#            labels = labels.cuda()
         t = time.time()
-        optimizer.zero_grad()
-        output = model(tweets)
-        loss = loss_fn(output, labels)
-        batch_loss = loss.data.cpu().numpy()
-        epoch_loss += batch_loss
-        loss.backward()
-        optimizer.step()
+        tweets = batch[0]
+        labels = batch[1]
+        if DEBUG:
+            start_optim_zero = torch.cuda.Event(enable_timing=True)
+            end_optim_zero = torch.cuda.Event(enable_timing=True)
+            start_model = torch.cuda.Event(enable_timing=True)
+            end_model = torch.cuda.Event(enable_timing=True)
+            start_loss = torch.cuda.Event(enable_timing=True)
+            end_loss = torch.cuda.Event(enable_timing=True)
+            start_loss_item = torch.cuda.Event(enable_timing=True)
+            end_loss_item = torch.cuda.Event(enable_timing=True)
+            start_loss_back = torch.cuda.Event(enable_timing=True)
+            end_loss_back = torch.cuda.Event(enable_timing=True)
+            start_optim_step = torch.cuda.Event(enable_timing=True)
+            end_optim_step = torch.cuda.Event(enable_timing=True)
+
+            start_optim_zero.record()
+            if i % ACCUMULATE_GRADS is 1: optimizer.zero_grad()
+            end_optim_zero.record()
+            start_model.record()
+            output = model(tweets)
+            end_model.record()
+            start_loss.record()
+            loss = loss_fn(output, labels)
+            end_loss.record()
+            start_loss_item.record()
+            batch_loss = loss.item()
+            train_loss += batch_loss
+            end_loss_item.record()
+            start_loss_back.record()
+            loss.backward()
+            end_loss_back.record()
+            start_optim_step.record()
+            if i % ACCUMULATE_GRADS is 0: optimizer.step()
+            end_optim_step.record()
+
+            torch.synchronize()
+            t_optim_zero = start_optim_zero.elapsed_time(end_optim_zero)
+            t_model = start_model.elapsed_time(end_model)
+            t_loss = start_loss.elapsed_time(end_loss)
+            t_loss_item = start_loss_item.elapsed_time(end_loss_item)
+            t_loss_back = start_loss_back.elapsed_time(end_loss_back)
+            t_optim_step = start_optim_step.elapsed_time(end_optim_step)
+            print("DEBUG TIMES\nOptim Zero: {}\nModel: {}\nLoss: {}\nLoss Item: {}\nLoss Back: {}\nOptim Step: {}"
+                  .format(t_optim_zero, t_model, t_loss, t_loss_item, t_loss_back, t_optim_step))
+
+        else:
+            if i % ACCUMULATE_GRADS is 1: optimizer.zero_grad()
+            output = model(tweets)
+            loss = loss_fn(output, labels)
+            batch_loss = loss.item()
+            train_loss += batch_loss
+            loss.backward()
+            if i % ACCUMULATE_GRADS is 0: optimizer.step()
+
         print("Epoch {}: Step {} / {} took {}s - Train batch loss: {}".format(e, i, len_train_loader, time.time()-t, batch_loss))
-    train_loss = epoch_loss / len_train_loader
+    train_loss /= (len_train_loader * ACCUMULATE_GRADS)
 
     val_loss = 0
     len_val_loader = len(val_loader)
     for i, batch in enumerate(val_loader):
-        tweets = batch.inp
-        labels = batch.tgt
-#        if GPU:
-#            tweets = tweets.cuda()
-#            labels = labels.cuda()
+        t = time.time()
+        tweets = batch[0]
+        labels = batch[1]
         output = model(tweets)
-        batch_loss = loss_fn(output, labels).data.cpu().numpy()
+        batch_loss = loss_fn(output, labels).item()
         val_loss += batch_loss
-        print("Epoch {} - Val batch loss: {}".format(e, batch_loss))
+        print("Epoch {}: Step {} / {} took {}s - Val batch loss: {}".format(e, i, len_val_loader, time.time()-t, batch_loss))
     val_loss /= len_val_loader
     print("EPOCH: {} took {}, TRAIN_LOSS: {:.2f}, VAL_LOSS: {:.2f}".format(e, time.strftime("%H:%M:%S".format(time.time() - epoch_start)), train_loss, val_loss))
 
@@ -120,13 +165,10 @@ for e in range(EPOCHS):
 test_loss = 0
 len_test_loader = len(test_loader)
 for i, batch in enumerate(test_loader):
-    tweets = batch.inp
-    labels = batch.tgt
-#    if GPU:
-#        tweets = tweets.cuda()
-#        labels = labels.cuda()
+    tweets = batch[0]
+    labels = batch[1]
     output = model(tweets)
-    test_loss += loss_fn(output, labels).data.cpu().numpy()
+    test_loss += loss_fn(output, labels).item()
     print("Step {} / {} - Test batch loss: {}".format(i, len_test_loader, batch_loss))
 test_loss /= len(test_loader)
 print("TEST_LOSS: {:.2f}".format(test_loss))
