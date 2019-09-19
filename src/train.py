@@ -23,7 +23,6 @@ TEST_THR = 100000000
 MAX_TWEET_LEN = 426
 LOAD_DATA = True
 DEBUG = False
-ACCUMULATE_GRADS = 1  # update gradients only every k'th step during training (inactive when k=1)
 
 """
 Dataset is small enough to completely store on the gpu. 
@@ -107,7 +106,7 @@ for e in range(EPOCHS):
             end_optim_step = torch.cuda.Event(enable_timing=True)
 
             start_optim_zero.record()
-            if i % ACCUMULATE_GRADS is 1: optimizer.zero_grad()
+            optimizer.zero_grad()
             end_optim_zero.record()
             start_model.record()
             output = model(tweets)
@@ -123,30 +122,30 @@ for e in range(EPOCHS):
             loss.backward()
             end_loss_back.record()
             start_optim_step.record()
-            if i % ACCUMULATE_GRADS is 0: optimizer.step()
+            optimizer.step()
             end_optim_step.record()
 
-            torch.synchronize()
+            torch.cuda.synchronize()
             t_optim_zero = start_optim_zero.elapsed_time(end_optim_zero)
             t_model = start_model.elapsed_time(end_model)
             t_loss = start_loss.elapsed_time(end_loss)
             t_loss_item = start_loss_item.elapsed_time(end_loss_item)
             t_loss_back = start_loss_back.elapsed_time(end_loss_back)
             t_optim_step = start_optim_step.elapsed_time(end_optim_step)
-            print("DEBUG TIMES\nOptim Zero: {}\nModel: {}\nLoss: {}\nLoss Item: {}\nLoss Back: {}\nOptim Step: {}"
+            print("DEBUG TIMES in ms\nOptim Zero: {}\nModel: {}\nLoss: {}\nLoss Item: {}\nLoss Back: {}\nOptim Step: {}"
                   .format(t_optim_zero, t_model, t_loss, t_loss_item, t_loss_back, t_optim_step))
 
         else:
-            if i % ACCUMULATE_GRADS is 1: optimizer.zero_grad()
+            optimizer.zero_grad()
             output = model(tweets)
             loss = loss_fn(output, labels)
             batch_loss = loss.item()
             train_loss += batch_loss
             loss.backward()
-            if i % ACCUMULATE_GRADS is 0: optimizer.step()
+            optimizer.step()
 
         print("Epoch {}: Step {} / {} took {}s - Train batch loss: {}".format(e, i, len_train_loader, time.time()-t, batch_loss))
-    train_loss /= (len_train_loader * ACCUMULATE_GRADS)
+    train_loss /= len_train_loader
 
     val_loss = 0
     len_val_loader = len(val_loader)
@@ -180,6 +179,18 @@ if test_loss <= TEST_THR:
 
 
 """
+USE=0.02, batch_size=128
+DEBUG TIMES in ms
+Optim Zero: 0.07215999811887741
+Model: 7014.927734375
+Loss: 0.026784000918269157
+Loss Item: 0.1563519984483719
+Loss Back: 3.4078400135040283
+Optim Step: 0.14681600034236908
+Epoch 0: Step 5 / 200 took 7.01894736289978s - Train batch loss: 76.36875915527344
+
+
+
 USE=0.1, batch_size=128:
 Epoch 0: Step 46 / 997
 move to cuda: 0.0008s
