@@ -21,7 +21,7 @@ GPU = True
 USE = 0.1
 TEST_THR = 100000000
 MAX_TWEET_LEN = 426
-CUT_TWEETS_AT = 200
+CUT_TWEETS_AT = 100
 LOAD_DATA = True
 DEBUG = True
 
@@ -92,6 +92,7 @@ for e in range(EPOCHS):
     epoch_start = time.time()
     train_loss = 0
     len_train_loader = len(train_loader)
+    batch_times = []
     for i, batch in enumerate(train_loader):
         t = time.time()
         tweets = batch[0]
@@ -149,9 +150,9 @@ for e in range(EPOCHS):
             loss.backward()
             optimizer.step()
 
-        batch_time = time.time() - t
-        total_time_left = batch_time * (len_train_loader - i + (EPOCHS - e) * len_train_loader)
-        print("Epoch {}: Step {} / {} took {}s ({} left) - Train batch loss: {}".format(e, i, len_train_loader, batch_time, get_hms_string(total_time_left), batch_loss))
+        batch_times.append(time.time() - t)
+        total_time_left = np.mean(batch_times) * (len_train_loader - i + (EPOCHS - e) * len_train_loader)
+        print("Epoch {}: Step {} / {} took {}s (~{} left) - Train batch loss: {}".format(e, i, len_train_loader, batch_times[-1], get_hms_string(total_time_left), batch_loss))
     train_loss /= len_train_loader
 
     val_loss = 0
