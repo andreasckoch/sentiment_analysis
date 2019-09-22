@@ -17,9 +17,9 @@ class SentimentGPT(nn.Module):
         # collapse output of gpt2_stem to one-dimensional embedding of tweet
         self.collapse_tweet = nn.Linear(in_features=tweet_len, out_features=1, bias=True)
         self.classifier = nn.Sequential(
-            nn.ReLU(),
+            nn.Tanh(),
             nn.Linear(in_features=768, out_features=256, bias=True),
-            nn.ReLU(),
+            nn.Tanh(),
             nn.Linear(in_features=256, out_features=2))
 
         # no gradient in gpt2
