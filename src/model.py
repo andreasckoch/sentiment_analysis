@@ -13,13 +13,14 @@ class SentimentGPT(nn.Module):
     def __init__(self, tweet_len):
         super(SentimentGPT, self).__init__()
 
-        self.tweet_len = tweet_len
-
         self.gpt2_stem = pt.modeling_gpt2.GPT2Model.from_pretrained('gpt2')
-        self.collapse_tweet = nn.Linear(in_features=self.tweet_len, out_features=1, bias=True)
+
+        # collapse output of gpt2_stem to one-dimensional embedding of tweet
+        self.collapse_tweet = nn.Linear(in_features=tweet_len, out_features=1, bias=True)
         self.classifier = nn.Sequential(
+            nn.ReLU(),
             nn.Linear(in_features=768, out_features=256, bias=True),
-            nn.Tanh(),
+            nn.ReLU(),
             nn.Linear(in_features=256, out_features=2))
 
         # no gradient in gpt2

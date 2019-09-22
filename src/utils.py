@@ -2,13 +2,22 @@
 
 import torch
 
-"""
-Map-style dataset as an iteration can be well performed randomly.
-See https://pytorch.org/docs/master/data.html#single-and-multi-process-data-loading 
-"""
 
+def get_hms_string(s):
+    m = s // 60
+    s %= 60
+    h = m // 60
+    m %= 60
+    return "{}h:{}min:{:.1f}s".format(int(h), int(m), s)
+
+
+###### UNUSED FUNCTIONS FOR LATER REFERENCE BELOW THIS LINE ###############################
 
 class Data(torch.utils.data.Dataset):
+    """
+    Map-style dataset as an iteration can be well performed randomly.
+    See https://pytorch.org/docs/master/data.html#single-and-multi-process-data-loading
+    """
 
     def __init__(self, X, y):
         self.X = X
@@ -24,13 +33,11 @@ class Data(torch.utils.data.Dataset):
         return len(self.y)
 
 
-"""
-Create function to apply to batch to allow for memory pinning when using a custom batch/custom dataset.
-Following guide on https://pytorch.org/docs/master/data.html#single-and-multi-process-data-loading
-"""
-
-
 class SimpleCustomBatch:
+    """
+    Create function to apply to batch to allow for memory pinning when using a custom batch/custom dataset.
+    Following guide on https://pytorch.org/docs/master/data.html#single-and-multi-process-data-loading
+    """
 
     def __init__(self, data):
         transposed_data = list(zip(*data))
@@ -45,11 +52,3 @@ class SimpleCustomBatch:
 
 def collate_wrapper(batch):
     return SimpleCustomBatch(batch)
-
-
-def get_hms_string(s):
-    m = s // 60
-    s %= 60
-    h = m // 60
-    m %= 60
-    return "{}h:{}min:{:.1f}s".format(int(h), int(m), s)
