@@ -9,20 +9,21 @@ from torch.utils.data import TensorDataset
 import pytorch_transformers as pt
 import csv
 from model import SentimentGPT
-from utils import collate_wrapper
+from utils import collate_wrapper, get_hms_string
 
 # PARAMETERS
-EPOCHS = 20
+EPOCHS = 2
 LR = 0.9
 MOM = 0.99
 DECAY = 0.5
 
 GPU = True
-USE = 0.02
+USE = 0.1
 TEST_THR = 100000000
 MAX_TWEET_LEN = 426
+CUT_TWEETS_AT = 200
 LOAD_DATA = True
-DEBUG = False
+DEBUG = True
 
 """
 Dataset is small enough to completely store on the gpu. 
@@ -59,9 +60,13 @@ if LOAD_DATA:
     val_tokens = [tokenizer.encode(x[1]) for x in val_data]
     test_tokens = [tokenizer.encode(x[1]) for x in test_data]
     # pad with '<|endoftext|>' = [50256] token such that all tweets have same length
-    train_tokens = torch.tensor([x + [50256] * (MAX_TWEET_LEN - len(x)) for x in train_tokens], device=device)
+    # train_tokens = torch.tensor([x + [50256] * (MAX_TWEET_LEN - len(x)) for x in train_tokens], device=device)
     val_tokens = torch.tensor([x + [50256] * (MAX_TWEET_LEN - len(x)) for x in val_tokens], device=device)
     test_tokens = torch.tensor([x + [50256] * (MAX_TWEET_LEN - len(x)) for x in test_tokens], device=device)
+
+    train_tokens = [x + [50256] * (MAX_TWEET_LEN - len(x)) for x in train_tokens]
+    MAX_TWEET_LEN = CUT_TWEETS_AT
+    train_tokens = torch.tensor([x[:CUT_TWEETS_AT] for x in train_tokens], device=device)
 
     # Labels need to be a 1D tensor with integers indicating the class for each value
     train_labels = torch.tensor([int(x[0]) for x in train_data], device=device)
@@ -144,7 +149,9 @@ for e in range(EPOCHS):
             loss.backward()
             optimizer.step()
 
-        print("Epoch {}: Step {} / {} took {}s - Train batch loss: {}".format(e, i, len_train_loader, time.time()-t, batch_loss))
+        batch_time = time.time() - t
+        total_time_left = batch_time * (len_train_loader - i + (EPOCHS - e) * len_train_loader)
+        print("Epoch {}: Step {} / {} took {}s ({} left) - Train batch loss: {}".format(e, i, len_train_loader, batch_time, get_hms_string(total_time_left), batch_loss))
     train_loss /= len_train_loader
 
     val_loss = 0
@@ -156,7 +163,7 @@ for e in range(EPOCHS):
         output = model(tweets)
         batch_loss = loss_fn(output, labels).item()
         val_loss += batch_loss
-        print("Epoch {}: Step {} / {} took {}s - Val batch loss: {}".format(e, i, len_val_loader, time.time()-t, batch_loss))
+        print("Epoch {}: Step {} / {} took {}s - Val batch loss: {}".format(e, i, len_val_loader, time.time() - t, batch_loss))
     val_loss /= len_val_loader
     print("EPOCH: {} took {}, TRAIN_LOSS: {:.2f}, VAL_LOSS: {:.2f}".format(e, time.strftime("%H:%M:%S".format(time.time() - epoch_start)), train_loss, val_loss))
 
@@ -175,7 +182,6 @@ if test_loss <= TEST_THR:
     print("Performance exceeded threshold. Saving model to models dir to be uploaded to cloud service")
     torch.save(model, '../models/sa_model_{}.pt'.format(datetime.datetime.now().strftime("%Y-%m-%d_%H:%M")))
     print("Execute: bash uploadmodels.sh")
-
 
 
 """
@@ -215,4 +221,3 @@ def nll_loss(input, target):
 
 
 """
-
