@@ -162,7 +162,7 @@ for e in range(EPOCHS):
 
         batch_times.append(time.time() - t)
         total_time_left = np.mean(
-            batch_times) * (len_train_loader - i + (EPOCHS - e) * len_train_loader)
+            batch_times) * (len_train_loader - i - 1 + (EPOCHS - e - 1) * len_train_loader)
         print("Epoch {}: Step {} / {} took {}s (~{} left) - Train batch loss: {}".format(
             e, i, len_train_loader, batch_times[-1], get_hms_string(total_time_left), batch_loss))
         i += 1
