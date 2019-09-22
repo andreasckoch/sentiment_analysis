@@ -194,9 +194,12 @@ for i, batch in enumerate(test_loader):
     tweets = batch[0]
     labels = batch[1]
     output = model(tweets)
-    test_loss += loss_fn(output, labels).item()
+    batch_loss = loss_fn(output, labels).item()
+    test_loss += batch_loss
     print("Step {} / {} - Test batch loss: {}".format(i, len_test_loader, batch_loss))
 test_loss /= len(test_loader)
 print("TEST_LOSS: {:.2f}".format(test_loss))
-torch.save(model, '../models/sa_model_{}.pt'.format(
-    datetime.datetime.now().strftime("%Y-%m-%d_%H:%M")))
+path = '../models/sa_model_{}.pt'.format(
+    datetime.datetime.now().strftime("%Y-%m-%d_%H:%M"))
+torch.save(model, path)
+print('Saved model to', path)
