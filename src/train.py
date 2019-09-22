@@ -20,11 +20,11 @@ DECAY = 0.5
 
 # technical parameters
 GPU = True
-USE = 0.1
-MAX_TWEET_LEN = 426  # previously measured in dataset
-CUT_TWEETS_AT = 100
+USE = 0.1  # factor indicating amount of the dataset used
+MAX_TWEET_LEN = 426  # previously measured in dataset, leave unchanged
+CUT_TWEETS_AT = 100  # cut the tweets at a particular length
 LOAD_DATA = True
-DEBUG = True
+DEBUG = False
 
 
 device = None
@@ -35,6 +35,8 @@ else:
 
 if LOAD_DATA:
     t = time.time()
+
+    # Dataset used: https://www.kaggle.com/kazanova/sentiment140
     with open('../data/train.csv', encoding='latin-1') as file:
         train_data = csv.reader(file, delimiter='|')
         train_data = list(train_data)
@@ -65,10 +67,9 @@ if LOAD_DATA:
     test_tokens = [(x + [50256] * (MAX_TWEET_LEN - len(x)))[:CUT_TWEETS_AT] for x in test_tokens]
     MAX_TWEET_LEN = CUT_TWEETS_AT
 
-    """
-    Dataset is small enough to completely store on the gpu. 
+    """ Dataset is small enough to completely store on the gpu. 
     If that's not possible, move batches to gpu while iterating over them and set pin_memory=True, num_workers=8 (ca.) in data loaders.
-    """
+    See https://pytorch.org/docs/master/notes/cuda.html as well as link in 'utils.py' for details on memory pinning and time measurement. """
     train_tokens = torch.tensor(train_tokens, device=device)
     val_tokens = torch.tensor(val_tokens, device=device)
     test_tokens = torch.tensor(test_tokens, device=device)
@@ -96,7 +97,7 @@ loss_fn = nn.CrossEntropyLoss()
 optimizer = torch.optim.SGD(
     model.classifier.parameters(), lr=LR, momentum=MOM, weight_decay=DECAY)
 
-print("Start training")
+print("Start training for {} epochs.".format(EPOCHS))
 for e in range(EPOCHS):
     epoch_start = time.time()
     train_loss = 0

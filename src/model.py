@@ -6,8 +6,7 @@ import pytorch_transformers as pt
 
 class SentimentGPT(nn.Module):
     """
-    A simple sentiment analysis task (positive/negative) fine-tuned on the GPT2 Model. Dataset used from Kaggle:
-    https://www.kaggle.com/kazanova/sentiment140
+    A simple sentiment analysis task (positive/negative) fine-tuned on the GPT2 Model. 
     """
 
     def __init__(self, tweet_len):
