@@ -1,4 +1,4 @@
-# Sentiment Analysis on Tweets
+# Sentiment Analysis of Tweets
 This project exists for testing capabilities and characteristics of fine-tuning a sentiment analysis task on 
 the Transformer architecture, which was pre-trained on a language modelling task.
 
